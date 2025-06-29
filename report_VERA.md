@@ -164,6 +164,8 @@ GRANT INSERT, UPDATE ON books, readers, loans TO user_role;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO analyst;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO admin;
 ```
+Результат выполнения:
+![alt text](./img/5.png)
 
 ## Создаём функции
 
@@ -198,7 +200,12 @@ BEGIN
     VALUES (current_user, current_role(), 'Выдача книги: ' || p_book_id || ' читателю: ' || p_reader_id);
 END;
 $$ LANGUAGE plpgsql;
+
 ```
+Результат выполнения:
+![alt text](./img/7.png)
+
+
 ## Протестируем функции
 С удачными данными
 
@@ -211,6 +218,24 @@ SELECT issue_book(1, 1, '2023-01-01');
 SELECT add_book('Новая книга', 999, 1, 1, 2023, 300); -- Non-existent genre
 SELECT issue_book(999, 1, '2023-01-01');
 ```
+Результат выполнения:
+![alt text](./img/8.png)
+
+---
+## Проиндексируем
+
+```sql
+CREATE INDEX idx_books_genre ON books(genre_id);
+CREATE INDEX idx_books_author ON books(author_id);
+CREATE INDEX idx_books_publisher ON books(publisher_id);
+CREATE INDEX idx_loans_book ON loans(book_id);
+CREATE INDEX idx_loans_reader ON loans(reader_id);
+
+Результат выполнения:
+![alt text](./img/9.png)
+
+```
+
 ---
 ## Результаты работы
 
