@@ -34,6 +34,184 @@
 
 ---
 
+## Создадим базу данных
+ С помощью этого скрипта создадим нашу базу данных
+
+ ```sql
+CREATE TABLE genres (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE authors (
+    id SERIAL PRIMARY KEY,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE publishers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE books (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    genre_id INT REFERENCES genres(id),
+    author_id INT REFERENCES authors(id),
+    publisher_id INT REFERENCES publishers(id),
+    year INT,
+    pages INT
+);
+
+CREATE TABLE readers (
+    id SERIAL PRIMARY KEY,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    birth_date DATE,
+    gender CHAR(1) CHECK (gender IN ('M', 'F'))
+);
+
+CREATE TABLE loans (
+    id SERIAL PRIMARY KEY,
+    book_id INT REFERENCES books(id),
+    reader_id INT REFERENCES readers(id),
+    issue_date DATE NOT NULL,
+    return_date DATE
+);
+
+CREATE TABLE operation_log (
+    id SERIAL PRIMARY KEY,
+    user_name VARCHAR(100),
+    role VARCHAR(50),
+    operation TEXT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+Результат выполнения:
+
+![alt text](./img/screen_1.png)
+![alt text](./img/2.png)
+---
+## Заполним данными
+Далее нам необходимо заполнить нашу базу данным, которые мы добавим с помощью скрипта:
+
+```sql
+INSERT INTO genres (name) VALUES 
+('Фантастика'),
+('Детектив'),
+('История'),
+('Поэзия'),
+('Научная литература');
+
+INSERT INTO authors (first_name, last_name) VALUES 
+('Иван', 'Ефремов'),
+('Агата', 'Кристи'),
+('Лев', 'Толстой'),
+('Александр', 'Пушкин'),
+('Сергей', 'Капица');
+
+INSERT INTO publishers (name) VALUES 
+('Эксмо'),
+('АСТ'),
+('Просвещение'),
+('Наука'),
+('Питер');
+
+INSERT INTO books (title, genre_id, author_id, publisher_id, year, pages) VALUES 
+('Туманность Андромеды', 1, 1, 1, 1957, 320),
+('Убийство в Восточном экспрессе', 2, 2, 2, 1934, 256),
+('Война и мир', 3, 3, 3, 1869, 1225),
+('Евгений Онегин', 4, 4, 4, 1833, 224),
+('Жизнь науки', 5, 5, 5, 1980, 300);
+
+INSERT INTO readers (first_name, last_name, birth_date, gender) VALUES 
+('Анна', 'Иванова', '1990-05-14', 'F'),
+('Дмитрий', 'Смирнов', '1985-11-22', 'M'),
+('Екатерина', 'Петрова', '2001-03-03', 'F'),
+('Алексей', 'Кузнецов', '1998-07-09', 'M'),
+('Мария', 'Соколова', '1975-01-30', 'F');
+
+INSERT INTO loans (book_id, reader_id, issue_date, return_date) VALUES 
+(1, 1, '2024-06-01', '2024-06-10'),
+(2, 2, '2024-06-05', '2024-06-12'),
+(3, 3, '2024-06-08', NULL),
+(4, 4, '2024-06-10', '2024-06-20'),
+(5, 5, '2024-06-15', NULL);
+
+INSERT INTO operation_log (user_name, role, operation) VALUES 
+('admin', 'администратор', 'Добавление жанров'),
+('admin', 'администратор', 'Добавление авторов'),
+('admin', 'администратор', 'Добавление книг'),
+('operator1', 'оператор', 'Регистрация читателя'),
+('operator1', 'оператор', 'Выдача книги');
+
+```
+Результат выполнения:
+![alt text](./img/3.png)
+
+## Добавляем роли
+
+```sql
+CREATE ROLE operator;
+CREATE ROLE user_role;
+CREATE ROLE analyst;
+CREATE ROLE admin;
+
+GRANT INSERT, UPDATE, DELETE ON genres, authors, publishers TO operator;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO user_role;
+GRANT INSERT, UPDATE ON books, readers, loans TO user_role;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO analyst;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO admin;
+```
+
+## Создаём функции
+
+```sql
+CREATE OR REPLACE FUNCTION add_book(
+    p_title VARCHAR,
+    p_genre_id INT,
+    p_author_id INT,
+    p_publisher_id INT,
+    p_year INT,
+    p_pages INT
+) RETURNS VOID AS $$
+BEGIN
+    INSERT INTO books (title, genre_id, author_id, publisher_id, year, pages)
+    VALUES (p_title, p_genre_id, p_author_id, p_publisher_id, p_year, p_pages);
+    
+    INSERT INTO operation_log (user_name, role, operation)
+    VALUES (current_user, current_role(), 'Добавление книги: ' || p_title);
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION issue_book(
+    p_book_id INT,
+    p_reader_id INT,
+    p_issue_date DATE
+) RETURNS VOID AS $$
+BEGIN
+    INSERT INTO loans (book_id, reader_id, issue_date)
+    VALUES (p_book_id, p_reader_id, p_issue_date);
+    
+    INSERT INTO operation_log (user_name, role, operation)
+    VALUES (current_user, current_role(), 'Выдача книги: ' || p_book_id || ' читателю: ' || p_reader_id);
+END;
+$$ LANGUAGE plpgsql;
+```
+## Протестируем функции
+С удачными данными
+
+```sql
+SELECT add_book('Новая книга', 1, 1, 1, 2023, 300);
+SELECT issue_book(1, 1, '2023-01-01');
+```
+С неудачными данными
+```sql
+SELECT add_book('Новая книга', 999, 1, 1, 2023, 300); -- Non-existent genre
+SELECT issue_book(999, 1, '2023-01-01');
+```
+---
 ## Результаты работы
 
 В процессе разработки были выполнены следующие шаги:
@@ -62,54 +240,3 @@
 База данных готова к эксплуатации и может быть расширена в будущем (например, с добавлением функций бронирования книг, учета штрафов, интеграции с внешними библиотечными системами и т.д.).
 
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-```sql
-CREATE TABLE persons (
-    id SERIAL PRIMARY KEY,
-    last_name TEXT,
-    first_name TEXT,
-    patronymic TEXT,
-    description TEXT
-);
-
-
-```
-![alt text](./img/screen-1.png)
----
-
-## 1.  Добавить данные в таблицу (в виде строки)
-
-```sql
-INSERT INTO persons (last_name, first_name, patronymic, description)
-VALUES ('Иванов', 'Иван', 'Иванович', 'Пример записи');
-```
-![alt text](./img/screen-2.png)
-
-Пояснение:
-```sql
-INSERT INTO — добавляет новую строку в таблицу.
-
-VALUES (...) — задаёт значения для перечисленных столбцов.
- ```
- **_______________________**
-
----
-
